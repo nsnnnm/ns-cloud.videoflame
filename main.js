@@ -1,4 +1,4 @@
-import init, { fast_grayscale } from "./img_wasm.js";
+import init, { fast_grayscale } from "./wasm/img_wasm.js";
 
 const fileInput = document.getElementById("file");
 const extractBtn = document.getElementById("extract");
