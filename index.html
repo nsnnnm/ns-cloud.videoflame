@@ -1,61 +1,29 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<title>動画フレーム抽出ツール</title>
-<style>
-body { font-family: sans-serif; }
-#frames img { width: 160px; margin: 4px; }
-</style>
+  <meta charset="UTF-8">
+  <title>video flame Ns-Cloud</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<h2>動画フレーム抽出</h2>
+<h1>動画フレーム抽出ツール</h1>
 
-<input type="file" id="file" accept="video/*"><br><br>
+<div class="controls">
+  <input type="file" id="file" accept="video/*">
 
-<label>
-  抽出間隔（秒）:
-  <input id="interval" type="number" value="1" step="0.1">
-</label>
-<button onclick="extract()">抽出</button>
+  <label>
+    抽出間隔（秒）
+    <input type="number" id="interval" value="1" step="0.1" min="0.1">
+  </label>
+
+  <button id="extract">抽出開始</button>
+</div>
 
 <hr>
+
 <div id="frames"></div>
 
-<script>
-const video = document.createElement("video");
-video.muted = true;
-
-const canvas = document.createElement("canvas");
-const ctx = canvas.getContext("2d");
-
-async function extract() {
-  const file = document.getElementById("file").files[0];
-  if (!file) return alert("動画を選んで");
-
-  video.src = URL.createObjectURL(file);
-  await video.play(); // メタデータ読み込み用
-  video.pause();
-
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-
-  const interval = parseFloat(document.getElementById("interval").value);
-  const framesDiv = document.getElementById("frames");
-  framesDiv.innerHTML = "";
-
-  for (let t = 0; t < video.duration; t += interval) {
-    video.currentTime = t;
-    await new Promise(r => video.onseeked = r);
-
-    ctx.drawImage(video, 0, 0);
-    const img = document.createElement("img");
-    img.src = canvas.toDataURL("image/png");
-    framesDiv.appendChild(img);
-  }
-}
-</script>
-
+<script src="main.js"></script>
 </body>
 </html>
