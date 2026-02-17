@@ -15,11 +15,15 @@ const framesDiv = document.getElementById("frames");
 let extractedImages = [];
 let processedVideoBlob = null;
 
+// ======================
+// 実行ボタン
+// ======================
 runBtn.addEventListener("click", async () => {
   if (!fileInput.files[0]) {
     alert("動画を選択してください");
     return;
   }
+
   extractedImages = [];
   processedVideoBlob = null;
   framesDiv.innerHTML = "";
@@ -40,7 +44,9 @@ runBtn.addEventListener("click", async () => {
   }
 });
 
-// ZIP DL（フレーム抽出用）
+// ======================
+// ZIPダウンロード
+// ======================
 zipBtn.addEventListener("click", async () => {
   if (extractedImages.length === 0) return;
 
@@ -60,12 +66,13 @@ zipBtn.addEventListener("click", async () => {
 });
 
 // ======================
-// フレーム抽出関数
+// フレーム抽出（高速化版）
 // ======================
 async function extractFrames(file, intervalSec) {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.src = url;
+  video.muted = true;
   await video.play();
   video.pause();
 
@@ -92,15 +99,12 @@ async function extractFrames(file, intervalSec) {
     extractedImages.push(imgData);
 
     // ステータス & 進捗バー
-    const progressPercent = Math.min(
-      Math.floor((currentTime / video.duration) * 100),
-      100
-    );
+    const progressPercent = Math.min(Math.floor((currentTime / video.duration) * 100), 100);
     statusDiv.textContent = `抽出中… (${progressPercent}%)`;
     progressBar.value = progressPercent;
 
     currentTime += intervalSec;
-    await new Promise((r) => setTimeout(r, 1));
+    await new Promise((r) => setTimeout(r, 1)); // CPUを圧迫しすぎないための微小ウェイト
   }
 
   statusDiv.textContent = "抽出完了";
@@ -109,12 +113,13 @@ async function extractFrames(file, intervalSec) {
 }
 
 // ======================
-// 動画加工関数（逆再生/倍速）
+// 動画加工（逆再生/倍速、高速化版）
 // ======================
 async function processVideo(file, speed = 1, reverse = false) {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.src = url;
+  video.muted = true;
   await video.play();
   video.pause();
 
@@ -123,51 +128,51 @@ async function processVideo(file, speed = 1, reverse = false) {
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
 
-  const interval = 1 / 30; // 30fps
-  const frames = [];
-  // 全フレーム取得
-  for (let t = 0; t < video.duration; t += interval) {
-    video.currentTime = t;
-    await new Promise((r) => (video.onseeked = r));
-    const frameCanvas = document.createElement("canvas");
-    frameCanvas.width = video.videoWidth;
-    frameCanvas.height = video.videoHeight;
-    frameCanvas.getContext("2d").drawImage(video, 0, 0);
-    frames.push(frameCanvas);
-    // 進捗表示
-    progressBar.value = Math.min(Math.floor((t / video.duration) * 100), 100);
-    statusDiv.textContent = `フレーム読み込み中… (${progressBar.value}%)`;
-    await new Promise((r) => setTimeout(r, 1));
-  }
+  const frameDuration = 1000 / 30; // 30fps
+  let currentTime = reverse ? video.duration : 0;
+  const increment = reverse ? -frameDuration / 1000 : frameDuration / 1000;
 
-  // 逆再生ならフレームを逆順に
-  if (reverse) frames.reverse();
-
-  // MediaRecorderでリアルタイム書き出し
   const stream = canvas.captureStream(30);
   const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
   const chunks = [];
   recorder.ondataavailable = (e) => chunks.push(e.data);
   recorder.start();
 
-  for (let i = 0; i < frames.length; i++) {
-    ctx.drawImage(frames[i], 0, 0);
-    await new Promise((r) => setTimeout(r, (1000 / 30) / speed)); // speed反映
-    progressBar.value = Math.floor((i / frames.length) * 100);
-    statusDiv.textContent = `動画書き出し中… (${progressBar.value}%)`;
-  }
+  statusDiv.textContent = "動画書き出し中…";
+  progressBar.value = 0;
 
-  recorder.stop();
-  processedVideoBlob = await new Promise((resolve) =>
-    recorder.onstop = () => resolve(new Blob(chunks, { type: "video/webm" }))
-  );
+  await new Promise((resolve) => {
+    function drawFrame() {
+      if ((reverse && currentTime <= 0) || (!reverse && currentTime >= video.duration)) {
+        recorder.stop();
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: "video/webm" });
+          processedVideoBlob = blob;
+          const outVideo = document.createElement("video");
+          outVideo.controls = true;
+          outVideo.src = URL.createObjectURL(blob);
+          framesDiv.appendChild(outVideo);
 
-  // プレビュー
-  const outVideo = document.createElement("video");
-  outVideo.controls = true;
-  outVideo.src = URL.createObjectURL(processedVideoBlob);
-  framesDiv.appendChild(outVideo);
+          progressBar.value = 100;
+          statusDiv.textContent = "動画加工完了";
+          resolve();
+        };
+        return;
+      }
 
-  progressBar.value = 100;
-  statusDiv.textContent = "動画加工完了";
+      video.currentTime = currentTime;
+      video.onseeked = () => {
+        ctx.drawImage(video, 0, 0);
+        const progressPercent = Math.floor(
+          ((reverse ? video.duration - currentTime : currentTime) / video.duration) * 100
+        );
+        progressBar.value = progressPercent;
+
+        currentTime += increment * speed;
+        setTimeout(drawFrame, frameDuration / speed);
+      };
+    }
+
+    drawFrame();
+  });
 }
