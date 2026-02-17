@@ -1,5 +1,5 @@
 // main.js
-import JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
+import * as JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
 
 const fileInput = document.getElementById("file");
 const intervalInput = document.getElementById("interval");
