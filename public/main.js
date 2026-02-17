@@ -1,4 +1,3 @@
-// main.js
 import * as JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
 
 const fileInput = document.getElementById("file");
@@ -15,12 +14,8 @@ const framesDiv = document.getElementById("frames");
 let extractedImages = [];
 let processedVideoBlob = null;
 
-// 実行ボタン
 runBtn.addEventListener("click", async () => {
-  if (!fileInput.files[0]) {
-    alert("動画を選択してください");
-    return;
-  }
+  if (!fileInput.files[0]) { alert("動画を選択してください"); return; }
 
   extractedImages = [];
   processedVideoBlob = null;
@@ -42,7 +37,6 @@ runBtn.addEventListener("click", async () => {
   }
 });
 
-// ZIPダウンロード
 zipBtn.addEventListener("click", async () => {
   if (extractedImages.length === 0) return;
 
@@ -61,34 +55,27 @@ zipBtn.addEventListener("click", async () => {
   statusDiv.textContent = "ZIP作成完了";
 });
 
-// フレーム抽出
+// ===== フレーム抽出 =====
 async function extractFrames(file, intervalSec) {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
-  video.src = url;
-  video.muted = true;
-  await video.play();
-  video.pause();
+  video.src = url; video.muted = true;
+  await video.play(); video.pause();
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
 
   let currentTime = 0;
-
   while (currentTime < video.duration) {
     video.currentTime = currentTime;
     await new Promise((resolve) => (video.onseeked = resolve));
     ctx.drawImage(video, 0, 0);
     const imgData = canvas.toDataURL("image/png");
 
-    // プレビュー追加
     const img = document.createElement("img");
-    img.src = imgData;
-    img.className = "preview-frame";
+    img.src = imgData; img.className = "preview-frame";
     framesDiv.appendChild(img);
-
     extractedImages.push(imgData);
 
     const progressPercent = Math.min(Math.floor((currentTime / video.duration) * 100), 100);
@@ -99,30 +86,38 @@ async function extractFrames(file, intervalSec) {
     await new Promise((r) => setTimeout(r, 1));
   }
 
-  statusDiv.textContent = "抽出完了";
-  progressBar.value = 100;
-  zipBtn.disabled = false;
+  statusDiv.textContent = "抽出完了"; progressBar.value = 100; zipBtn.disabled = false;
 }
 
-// 動画加工（逆再生/倍速、高速版）
+// ===== 動画加工（音声対応、逆再生は映像のみ） =====
 async function processVideo(file, speed = 1, reverse = false) {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
-  video.src = url;
-  video.muted = true;
-  await video.play();
-  video.pause();
+  video.src = url; video.muted = false;
+  await video.play(); video.pause();
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
 
-  const frameDuration = 1000 / 30; // 30fps
+  const frameDuration = 1000 / 30;
   let currentTime = reverse ? video.duration : 0;
   const increment = reverse ? -frameDuration / 1000 : frameDuration / 1000;
 
-  const stream = canvas.captureStream(30);
+  let stream;
+  if (reverse) {
+    // 逆再生: 音声なし
+    stream = canvas.captureStream(30);
+  } else {
+    // 倍速: 音声付き
+    const canvasStream = canvas.captureStream(30);
+    const audioCtx = new AudioContext();
+    const source = audioCtx.createMediaElementSource(video);
+    const dest = audioCtx.createMediaStreamDestination();
+    source.connect(dest); source.connect(audioCtx.destination);
+    stream = new MediaStream([...canvasStream.getVideoTracks(), ...dest.stream.getAudioTracks()]);
+  }
+
   const recorder = new MediaRecorder(stream, { mimeType: "video/webm" });
   const chunks = [];
   recorder.ondataavailable = (e) => chunks.push(e.data);
@@ -139,26 +134,24 @@ async function processVideo(file, speed = 1, reverse = false) {
           const blob = new Blob(chunks, { type: "video/webm" });
           processedVideoBlob = blob;
 
-          // プレビュー追加
+          // プレビュー
           const outVideo = document.createElement("video");
-          outVideo.controls = true;
-          outVideo.src = URL.createObjectURL(blob);
+          outVideo.controls = true; outVideo.src = URL.createObjectURL(blob);
           framesDiv.appendChild(outVideo);
 
-          // ダウンロードボタン追加
+          // ダウンロードボタン
           const dlBtn = document.createElement("button");
           dlBtn.textContent = "動画ダウンロード";
           dlBtn.className = "primary";
           dlBtn.onclick = () => {
             const a = document.createElement("a");
             a.href = URL.createObjectURL(blob);
-            a.download = "processed_video.webm";
+            a.download = reverse ? "processed_video_reverse.webm" : "processed_video.webm";
             a.click();
           };
           framesDiv.appendChild(dlBtn);
 
-          progressBar.value = 100;
-          statusDiv.textContent = "動画加工完了";
+          progressBar.value = 100; statusDiv.textContent = "動画加工完了";
           resolve();
         };
         return;
@@ -176,7 +169,6 @@ async function processVideo(file, speed = 1, reverse = false) {
         setTimeout(drawFrame, frameDuration / speed);
       };
     }
-
     drawFrame();
   });
 }
