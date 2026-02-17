@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>video flame Ns-Cloud</title>
+  <title>video flame ns-cloud</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -18,12 +18,16 @@
   </label>
 
   <button id="extract">抽出開始</button>
+  <button id="zip" disabled>ZIPでDL</button>
 </div>
 
 <hr>
 
+<div id="status"></div>
 <div id="frames"></div>
 
+<!-- JSZip -->
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="main.js"></script>
 </body>
 </html>
