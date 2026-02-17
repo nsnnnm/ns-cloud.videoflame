@@ -6,6 +6,7 @@ const intervalInput = document.getElementById("interval");
 const extractBtn = document.getElementById("extract");
 const zipBtn = document.getElementById("zip");
 const statusDiv = document.getElementById("status");
+const progressBar = document.getElementById("progress");
 const framesDiv = document.getElementById("frames");
 
 let extractedImages = [];
@@ -18,14 +19,15 @@ extractBtn.addEventListener("click", () => {
   extractedImages = [];
   framesDiv.innerHTML = "";
   zipBtn.disabled = true;
-  statusDiv.textContent = "抽出中...";
+  progressBar.value = 0;
+  statusDiv.textContent = "抽出中…";
   extractFrames(fileInput.files[0], parseFloat(intervalInput.value));
 });
 
 zipBtn.addEventListener("click", async () => {
   if (extractedImages.length === 0) return;
 
-  statusDiv.textContent = "ZIP作成中...";
+  statusDiv.textContent = "ZIP作成中…";
   const zip = new JSZip();
   extractedImages.forEach((imgData, i) => {
     zip.file(`frame_${i + 1}.png`, imgData.split(",")[1], { base64: true });
@@ -70,16 +72,20 @@ async function extractFrames(file, intervalSec) {
 
     extractedImages.push(imgData);
 
-    currentTime += intervalSec;
-    statusDiv.textContent = `抽出中… (${Math.min(
+    // ステータス & 進捗バー更新
+    const progressPercent = Math.min(
       Math.floor((currentTime / video.duration) * 100),
       100
-    )}%)`;
+    );
+    statusDiv.textContent = `抽出中… (${progressPercent}%)`;
+    progressBar.value = progressPercent;
 
-    // Web Worker でなくても非同期にして高速化
+    currentTime += intervalSec;
+    // 非同期でブラウザ固まらないように少し待つ
     await new Promise((r) => setTimeout(r, 1));
   }
 
   statusDiv.textContent = "抽出完了";
+  progressBar.value = 100;
   zipBtn.disabled = false;
 }
