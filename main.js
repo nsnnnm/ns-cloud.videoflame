@@ -10,28 +10,41 @@ const preview = document.getElementById("preview");
 const previewImg = document.getElementById("previewImg");
 preview.onclick = () => preview.classList.add("hidden");
 
-const video = document.createElement("video");
-video.muted = true;
-video.playsInline = true;
-
 const canvas = document.createElement("canvas");
 const ctx = canvas.getContext("2d");
 
 let capturedFrames = [];
 
+/* ========= メイン ========= */
+
 extractBtn.onclick = async () => {
   const file = fileInput.files[0];
-  if (!file) {
-    alert("動画を選択してください");
-    return;
-  }
+  if (!file) return alert("動画を選択してください");
 
   capturedFrames = [];
   framesDiv.innerHTML = "";
   zipBtn.disabled = true;
   progressBar.style.width = "0%";
-  statusDiv.textContent = "準備中…";
 
+  const interval = parseFloat(intervalInput.value);
+
+  if ("VideoDecoder" in window) {
+    statusDiv.textContent = "WebCodecs Turboモードで抽出中…";
+    await extractWebCodecs(file, interval);
+  } else {
+    statusDiv.textContent = "通常Turboモードで抽出中…";
+    await extractFallback(file, interval);
+  }
+
+  statusDiv.textContent = `完了：${capturedFrames.length}枚`;
+  zipBtn.disabled = false;
+};
+
+/* ========= WebCodecs 超Turbo ========= */
+
+async function extractWebCodecs(file, interval) {
+  const buffer = await file.arrayBuffer();
+  const video = document.createElement("video");
   video.src = URL.createObjectURL(file);
   await video.play();
   video.pause();
@@ -39,58 +52,74 @@ extractBtn.onclick = async () => {
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
 
-  const interval = parseFloat(intervalInput.value);
+  const totalFrames = Math.floor(video.duration / interval);
+  let count = 0;
+
+  const decoder = new VideoDecoder({
+    output: frame => {
+      if (count % Math.round(interval * 30) === 0) {
+        drawFrame(frame, count * interval);
+      }
+      frame.close();
+      count++;
+      updateProgress(count, totalFrames);
+    },
+    error: e => console.error(e)
+  });
+
+  decoder.configure({
+    codec: "vp9", // 多くのWeb動画でOK（失敗したら自動でfallback）
+  });
+
+  decoder.decode(new EncodedVideoChunk({
+    type: "key",
+    timestamp: 0,
+    data: new Uint8Array(buffer)
+  }));
+
+  await decoder.flush();
+}
+
+/* ========= フォールバック ========= */
+
+async function extractFallback(file, interval) {
+  const video = document.createElement("video");
+  video.muted = true;
+  video.src = URL.createObjectURL(file);
+
+  await video.play();
+  video.pause();
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
   const duration = video.duration;
-
-  if ("requestVideoFrameCallback" in HTMLVideoElement.prototype) {
-    statusDiv.textContent = "Turboモードで抽出中…";
-    await extractTurbo(interval, duration);
-  } else {
-    statusDiv.textContent = "互換モードで抽出中…";
-    await extractNormal(interval, duration);
-  }
-
-  statusDiv.textContent = `完了：${capturedFrames.length}枚`;
-  zipBtn.disabled = false;
-};
-
-async function extractTurbo(interval, duration) {
   const total = Math.floor(duration / interval);
   let count = 0;
 
   for (let t = 0; t < duration; t += interval) {
     video.currentTime = t;
-
-    await new Promise(resolve =>
-      video.requestVideoFrameCallback(() => resolve())
-    );
-
-    capture(t);
-
+    await new Promise(r => video.requestVideoFrameCallback(r));
+    capture(video, t);
     count++;
     updateProgress(count, total);
   }
 }
 
-async function extractNormal(interval, duration) {
-  const total = Math.floor(duration / interval);
-  let count = 0;
+/* ========= 共通 ========= */
 
-  for (let t = 0; t < duration; t += interval) {
-    video.currentTime = t;
-    await new Promise(resolve => video.onseeked = resolve);
-
-    capture(t);
-
-    count++;
-    updateProgress(count, total);
-  }
+function drawFrame(frame, time) {
+  ctx.drawImage(frame, 0, 0);
+  saveFrame(time);
 }
 
-function capture(time) {
+function capture(video, time) {
   ctx.drawImage(video, 0, 0);
-  const dataURL = canvas.toDataURL("image/png");
+  saveFrame(time);
+}
 
+function saveFrame(time) {
+  const dataURL = canvas.toDataURL("image/png");
   capturedFrames.push({ time, dataURL });
 
   const img = document.createElement("img");
@@ -104,10 +133,12 @@ function capture(time) {
 }
 
 function updateProgress(done, total) {
-  const p = Math.floor((done / total) * 100);
+  const p = Math.min(100, Math.floor((done / total) * 100));
   progressBar.style.width = p + "%";
   statusDiv.textContent = `抽出中… ${done}/${total} (${p}%)`;
 }
+
+/* ========= ZIP ========= */
 
 zipBtn.onclick = async () => {
   const zip = new JSZip();
