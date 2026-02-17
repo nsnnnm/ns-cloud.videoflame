@@ -15,9 +15,7 @@ const framesDiv = document.getElementById("frames");
 let extractedImages = [];
 let processedVideoBlob = null;
 
-// ======================
 // 実行ボタン
-// ======================
 runBtn.addEventListener("click", async () => {
   if (!fileInput.files[0]) {
     alert("動画を選択してください");
@@ -44,9 +42,7 @@ runBtn.addEventListener("click", async () => {
   }
 });
 
-// ======================
 // ZIPダウンロード
-// ======================
 zipBtn.addEventListener("click", async () => {
   if (extractedImages.length === 0) return;
 
@@ -65,9 +61,7 @@ zipBtn.addEventListener("click", async () => {
   statusDiv.textContent = "ZIP作成完了";
 });
 
-// ======================
-// フレーム抽出（高速化版）
-// ======================
+// フレーム抽出
 async function extractFrames(file, intervalSec) {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
@@ -81,7 +75,6 @@ async function extractFrames(file, intervalSec) {
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
 
-  const totalFrames = Math.ceil(video.duration / intervalSec);
   let currentTime = 0;
 
   while (currentTime < video.duration) {
@@ -98,13 +91,12 @@ async function extractFrames(file, intervalSec) {
 
     extractedImages.push(imgData);
 
-    // ステータス & 進捗バー
     const progressPercent = Math.min(Math.floor((currentTime / video.duration) * 100), 100);
     statusDiv.textContent = `抽出中… (${progressPercent}%)`;
     progressBar.value = progressPercent;
 
     currentTime += intervalSec;
-    await new Promise((r) => setTimeout(r, 1)); // CPUを圧迫しすぎないための微小ウェイト
+    await new Promise((r) => setTimeout(r, 1));
   }
 
   statusDiv.textContent = "抽出完了";
@@ -112,9 +104,7 @@ async function extractFrames(file, intervalSec) {
   zipBtn.disabled = false;
 }
 
-// ======================
-// 動画加工（逆再生/倍速、高速化版）
-// ======================
+// 動画加工（逆再生/倍速、高速版）
 async function processVideo(file, speed = 1, reverse = false) {
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
@@ -148,10 +138,24 @@ async function processVideo(file, speed = 1, reverse = false) {
         recorder.onstop = () => {
           const blob = new Blob(chunks, { type: "video/webm" });
           processedVideoBlob = blob;
+
+          // プレビュー追加
           const outVideo = document.createElement("video");
           outVideo.controls = true;
           outVideo.src = URL.createObjectURL(blob);
           framesDiv.appendChild(outVideo);
+
+          // ダウンロードボタン追加
+          const dlBtn = document.createElement("button");
+          dlBtn.textContent = "動画ダウンロード";
+          dlBtn.className = "primary";
+          dlBtn.onclick = () => {
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "processed_video.webm";
+            a.click();
+          };
+          framesDiv.appendChild(dlBtn);
 
           progressBar.value = 100;
           statusDiv.textContent = "動画加工完了";
