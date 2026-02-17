@@ -1,1 +1,0 @@
-/workspaces/ns-cloud.videoflame/target/wasm32-unknown-unknown/release/img_wasm.wasm: /workspaces/ns-cloud.videoflame/wasm/img_wasm/src/lib.rs /workspaces/ns-cloud.videoflame/wasm/img_wasm/src/utils.rs
